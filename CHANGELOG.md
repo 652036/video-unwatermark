@@ -9,19 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Cross-platform lux bootstrap: auto-selects v0.24.1 release assets for Linux / macOS (Darwin) / Windows (x86_64 & arm64); Windows uses `lux.exe` + zip extract
-- `start.ps1` / `start.bat` for Windows (venv, optional engines, Playwright Chromium tip, ffmpeg winget/choco tip, lux ensure)
-- `start.sh` macOS support: Homebrew ffmpeg install attempt; Chrome.app detection; lux via `app.engines.lux.ensure_lux` (single source of truth)
-
-### Documentation
-
-- Quick Start sections for macOS / Linux / Windows; ffmpeg one-liners (brew / apt / winget); lux no longer documented as Linux amd64 only
-- Locale READMEs (zh-CN + others) updated so Quick Start is not Linux-only
-
-### Documentation (earlier)
-
-- English landing README and multi-language docs (zh-CN, ja, ko, es, fr, de, pt-BR, ru, ar)
-- Architecture notes, contributing / security policies, issue templates
+- Cross-platform lux bootstrap: automatically selects the correct v0.24.1 release asset for Linux, macOS (Darwin), and Windows (x86_64 and arm64). Windows uses `lux.exe` with zip extraction.
+- Windows startup scripts (`start.ps1` / `start.bat`) with virtual environment setup, optional engines, Playwright Chromium, ffmpeg installation tips (winget/choco), and lux ensure.
+- Improved `start.sh` for macOS: Homebrew ffmpeg install attempt, Chrome.app detection, and lux management via `app.engines.lux.ensure_lux` (single source of truth).
 
 ## [1.1.0] - 2026-08
 
@@ -29,5 +19,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Multi-engine public UGC parser (share-page, douyin-browser, yt-dlp, videofetch, you-get, webparser, lux)
 - FastAPI UI + JSON API on port 8787
-- Optional local Netscape / browser cookies as last resort
+- Optional local Netscape / browser cookies for authentication
 - Explicit VIP/DRM host block list
