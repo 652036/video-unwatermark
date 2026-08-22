@@ -1,6 +1,6 @@
 # video-unwatermark
 
-Paste a **public** video share text or URL. The server races several extractors in parallel and returns a direct link (preferably without platform watermark) so you can download the original file.
+Paste a public video share text or URL. The server races several extractors in parallel and returns a direct link (preferably without platform watermark) so you can download the original file.
 
 <p align="center">
   <a href="README.md">EN</a> ·
@@ -27,7 +27,7 @@ Paste a **public** video share text or URL. The server races several extractors 
 - Multi-engine race: first successful extractor wins; others are cancelled
 - Engines: `share-page`, `douyin-browser` (headless Chrome), `yt-dlp`, `videofetch`, `you-get`, `webparser`, `lux`
 - Extracts the first `http(s)` URL from clipboard-style share slogans
-- Optional local Netscape cookies / `--cookies-from-browser` as a **last resort** (never fetched for you)
+- Supports local Netscape cookie files or `--cookies-from-browser` for authentication
 - Explicit block list for VIP / DRM hosts; WeChat Channels login/MITM capture refused
 - JSON API: parse, download, health, engines, OpenAPI at `/api/docs`
 
@@ -107,48 +107,48 @@ Timeouts: ~25s per engine, ~30s overall; Douyin/Kuaishou first race share-page +
 
 Platform APIs change often; parse failures are normal. Login-walled content may return `needs_cookie`.
 
-**Known limitations (honest):**
+**Known limitations:**
 
-- **Douyin**: datacenter IPs often lack `play_addr` on share pages; yt-dlp may report `needs cookie`. Public hybrid parsers or `douyin-browser` may still succeed. Cookies are never stolen.
+- **Douyin**: datacenter IPs often lack `play_addr` on share pages; yt-dlp may report `needs cookie`. Public hybrid parsers or `douyin-browser` may still succeed.
 - **Kuaishou**: yt-dlp has no Kuaishou extractor. Existing `www.kuaishou.com/short-video/{id}` pages may parse via webparser; `v.kuaishou.com` shorts often expire; TLS EOF from some hosts is common.
-- **Vimeo**: anonymous macos OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
+- **Vimeo**: anonymous macOS OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
 - **YouTube**: some IPs hit a bot wall (`Sign in to confirm you’re not a bot`); same optional local cookies apply.
 
-## Optional cookies (last resort)
+## Optional Cookies
 
-Some sites (especially Douyin / YouTube bot walls) block anonymous datacenter access. This tool **will not** obtain cookies for you. Do **not** paste cookies into chat.
+Some sites restrict anonymous access. Users can provide a local Netscape-format cookie file or use `--cookies-from-browser` to read cookies from a browser installed on the same machine.
 
-On **your own machine**, provide **your own** Netscape cookies:
+1. **CLI**
 
-1. **CLI** (same idea as yt-dlp `--cookies` / `--cookies-from-browser`):
+```bash
+# macOS / Linux
+./start.sh --cookies /path/to/cookies.txt
+./start.sh --cookies-from-browser chrome
 
-   ```bash
-   # macOS / Linux
-   ./start.sh --cookies /path/to/cookies.txt
-   ./start.sh --cookies-from-browser chrome
+# Windows PowerShell
+.\start.ps1 -Cookies C:\path\to\cookies.txt
+.\start.ps1 -CookiesFromBrowser chrome
+```
 
-   # Windows PowerShell
-   .\start.ps1 -Cookies C:\path\to\cookies.txt
-   .\start.ps1 -CookiesFromBrowser chrome
-   ```
-
-   `cookies_from_browser` only reads browsers installed on **that** machine. Useless on a remote VPS without your profile.
+`cookies_from_browser` only reads browsers installed on that machine. It is not available on a remote server without the user’s browser profile.
 
 2. **Environment**
 
-   ```bash
-   export UNWATERMARK_COOKIES=/path/to/cookies.txt
-   export UNWATERMARK_COOKIES_FROM_BROWSER=chrome   # optional, local only
-   ./start.sh
-   ```
+```bash
+export UNWATERMARK_COOKIES=/path/to/cookies.txt
+export UNWATERMARK_COOKIES_FROM_BROWSER=chrome
+./start.sh
+```
 
-3. **Web / API** — expand “Local Cookies” on the page, upload Netscape `cookies.txt` (e.g. via [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)), or set `cookies_from_browser`. JSON cookie exports are rejected.
+3. **Web / API**
 
-Uploaded files are used only for that parse/download; they are not traded to third-party ticket APIs.
+Expand “Local Cookies” on the page, upload a Netscape `cookies.txt` file (e.g. via [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)), or set `cookies_from_browser`. JSON cookie exports are not supported.
+
+Cookie files are used only for the current parse/download task.
 
 ## Architecture
 
-FastAPI serves `static/` and JSON routes. `app/extract.py` expands short links, rejects blocked hosts, then runs staged engine races (`share-page` / `douyin-browser` / core / fallback). The first `ok` result creates a short-lived job; `/api/download` materializes the file (with ffmpeg merge when needed). Details: [docs/architecture.md](docs/architecture.md). Docs index: [docs/README.md](docs/README.md).
+FastAPI serves `static/` and JSON routes. `app/extract.py` expands short links, rejects blocked hosts, then runs staged engine races. The first successful result creates a short-lived job; `/api/download` materializes the file (with ffmpeg merge when needed). Details: [docs/architecture.md](docs/architecture.md). Docs index: [docs/README.md](docs/README.md).
 
 ## Contributing
 
@@ -160,4 +160,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY
 
 ## Disclaimer
 
-Download only public content you have the right to save. Respect each platform’s terms and local law. This project does **not** provide membership cracking, DRM decryption, or unauthorized access.
+Download only public content you have the right to save. Respect each platform’s terms and local law. This project does not provide membership cracking, DRM decryption, or unauthorized access.
