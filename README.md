@@ -33,31 +33,50 @@ Paste a **public** video share text or URL. The server races several extractors 
 
 ## Quick Start
 
+### macOS / Linux
+
 ```bash
 cd video-unwatermark
 chmod +x start.sh
 ./start.sh
 ```
 
+### Windows
+
+```powershell
+cd video-unwatermark
+.\start.ps1
+# or: start.bat
+```
+
 Open **http://127.0.0.1:8787**.
 
-Manual install:
+Manual install (any OS):
 
 ```bash
 python3 -m venv .venv
+# Windows: py -3 -m venv .venv && .venv\Scripts\activate
 source .venv/bin/activate
 pip install -r requirements.txt
 # optional: pip install videofetch you-get
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-`ffmpeg` should be on `PATH` (yt-dlp uses it to merge audio/video). On Debian/Ubuntu:
+`ffmpeg` should be on `PATH` (yt-dlp uses it to merge audio/video):
 
 ```bash
+# macOS
+brew install ffmpeg
+
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+
+# Windows (pick one; may need admin)
+winget install --id Gyan.FFmpeg -e
+# choco install ffmpeg
 ```
 
-`start.sh` also tries to install optional engines (`videofetch`, `you-get`, Playwright) and downloads the `lux` Linux amd64 release into `bin/` when missing.
+`start.sh` / `start.ps1` also try to install optional engines (`videofetch`, `you-get`, Playwright) and auto-download the matching `lux` v0.24.1 release (Linux / macOS / Windows, x86_64 or arm64) into `bin/` when missing.
 
 ## API
 
@@ -104,8 +123,13 @@ On **your own machine**, provide **your own** Netscape cookies:
 1. **CLI** (same idea as yt-dlp `--cookies` / `--cookies-from-browser`):
 
    ```bash
+   # macOS / Linux
    ./start.sh --cookies /path/to/cookies.txt
    ./start.sh --cookies-from-browser chrome
+
+   # Windows PowerShell
+   .\start.ps1 -Cookies C:\path\to\cookies.txt
+   .\start.ps1 -CookiesFromBrowser chrome
    ```
 
    `cookies_from_browser` only reads browsers installed on **that** machine. Useless on a remote VPS without your profile.

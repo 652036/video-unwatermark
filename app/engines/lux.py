@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import subprocess
+import sys
 import tarfile
+import zipfile
 from pathlib import Path
 
 import httpx
@@ -14,36 +17,144 @@ from ..config import ROOT
 from ..urls import is_douyin, is_kuaishou
 from ..util import platform_of
 
-LUX_BIN = ROOT / "bin" / "lux"
-LUX_ASSET = "https://github.com/iawia002/lux/releases/download/v0.24.1/lux_0.24.1_Linux_x86_64.tar.gz"
+LUX_VERSION = "0.24.1"
+LUX_RELEASE_BASE = f"https://github.com/iawia002/lux/releases/download/v{LUX_VERSION}"
+
 _ENSURED = False
 
 
-def _ensure_lux() -> bool:
-    global _ENSURED
-    if LUX_BIN.is_file() and os.access(LUX_BIN, os.X_OK):
+def lux_bin_name() -> str:
+    return "lux.exe" if sys.platform == "win32" else "lux"
+
+
+def lux_bin_path() -> Path:
+    return ROOT / "bin" / lux_bin_name()
+
+
+# Module-level path used by the engine; recomputed for the current OS.
+LUX_BIN = lux_bin_path()
+
+
+def resolve_lux_asset(
+    system: str | None = None,
+    machine: str | None = None,
+) -> tuple[str, str]:
+    """Map OS/arch to lux release (asset_name, download_url).
+
+    Asset names match iawia002/lux v0.24.1 goreleaser uploads, e.g.
+    lux_0.24.1_Linux_x86_64.tar.gz / lux_0.24.1_Windows_x86_64.zip.
+    """
+    system = (system or platform.system()).strip()
+    machine = (machine or platform.machine()).strip().lower()
+
+    if system == "Darwin":
+        goos = "Darwin"
+    elif system == "Windows":
+        goos = "Windows"
+    else:
+        # Linux and unknown Unix-likes: prefer Linux assets.
+        goos = "Linux"
+
+    if machine in ("x86_64", "amd64", "x64"):
+        goarch = "x86_64"
+    elif machine in ("aarch64", "arm64"):
+        goarch = "arm64"
+    elif machine in ("i386", "i686", "x86"):
+        goarch = "i386"
+    elif machine.startswith("armv6") or machine in ("armv6l", "arm"):
+        # Windows/Linux armv6 assets exist; Darwin does not — fall back below.
+        goarch = "armv6"
+    else:
+        goarch = "x86_64"
+
+    # Darwin has no i386/armv6 builds in this release.
+    if goos == "Darwin" and goarch not in ("x86_64", "arm64"):
+        goarch = "arm64" if machine in ("aarch64", "arm64") else "x86_64"
+
+    # Windows armv6 exists; keep mapping. Prefer arm64 when reported as arm64.
+    archive_ext = "zip" if goos == "Windows" else "tar.gz"
+    name = f"lux_{LUX_VERSION}_{goos}_{goarch}.{archive_ext}"
+    return name, f"{LUX_RELEASE_BASE}/{name}"
+
+
+# Back-compat alias: previous code imported a single Linux URL constant.
+LUX_ASSET = resolve_lux_asset("Linux", "x86_64")[1]
+
+
+def _lux_ready(path: Path | None = None) -> bool:
+    path = path or LUX_BIN
+    if not path.is_file():
+        return False
+    if sys.platform == "win32":
         return True
-    if _ENSURED:
-        return LUX_BIN.is_file()
-    _ENSURED = True
-    try:
-        LUX_BIN.parent.mkdir(parents=True, exist_ok=True)
-        tmp = LUX_BIN.parent / ".lux.tgz"
-        with httpx.Client(follow_redirects=True, timeout=40.0) as client:
-            resp = client.get(LUX_ASSET)
-            resp.raise_for_status()
-            tmp.write_bytes(resp.content)
-        with tarfile.open(tmp, "r:gz") as tf:
-            member = next((m for m in tf.getmembers() if Path(m.name).name == "lux" and m.isfile()), None)
+    return os.access(path, os.X_OK)
+
+
+def _extract_lux_archive(archive: Path, dest_dir: Path, binary_name: str) -> bool:
+    dest = dest_dir / binary_name
+    if archive.suffixes[-2:] == [".tar", ".gz"] or archive.name.endswith(".tar.gz") or archive.suffix == ".tgz":
+        with tarfile.open(archive, "r:gz") as tf:
+            member = next(
+                (
+                    m
+                    for m in tf.getmembers()
+                    if Path(m.name).name in (binary_name, "lux", "lux.exe") and m.isfile()
+                ),
+                None,
+            )
             if member is None:
                 return False
-            member.name = "lux"
-            tf.extract(member, path=str(LUX_BIN.parent))
+            member.name = binary_name
+            tf.extract(member, path=str(dest_dir))
+    elif archive.suffix.lower() == ".zip" or archive.name.endswith(".zip"):
+        with zipfile.ZipFile(archive) as zf:
+            member_name = next(
+                (
+                    n
+                    for n in zf.namelist()
+                    if Path(n).name in (binary_name, "lux", "lux.exe") and not n.endswith("/")
+                ),
+                None,
+            )
+            if member_name is None:
+                return False
+            with zf.open(member_name) as src, open(dest, "wb") as out:
+                out.write(src.read())
+    else:
+        return False
+    if dest.is_file() and sys.platform != "win32":
+        dest.chmod(0o755)
+    return dest.is_file()
+
+
+def ensure_lux() -> bool:
+    """Download the platform-matching lux release into bin/ if missing."""
+    global _ENSURED, LUX_BIN
+    LUX_BIN = lux_bin_path()
+    if _lux_ready(LUX_BIN):
+        return True
+    if _ENSURED:
+        return _lux_ready(LUX_BIN)
+    _ENSURED = True
+    try:
+        asset_name, asset_url = resolve_lux_asset()
+        LUX_BIN.parent.mkdir(parents=True, exist_ok=True)
+        binary_name = lux_bin_name()
+        suffix = ".zip" if asset_name.endswith(".zip") else ".tgz"
+        tmp = LUX_BIN.parent / f".lux{suffix}"
+        with httpx.Client(follow_redirects=True, timeout=60.0) as client:
+            resp = client.get(asset_url)
+            resp.raise_for_status()
+            tmp.write_bytes(resp.content)
+        ok = _extract_lux_archive(tmp, LUX_BIN.parent, binary_name)
         tmp.unlink(missing_ok=True)
-        LUX_BIN.chmod(0o755)
-        return LUX_BIN.is_file()
+        return ok and _lux_ready(LUX_BIN)
     except Exception:
         return False
+
+
+# Private alias kept for older call sites / start scripts.
+_ensure_lux = ensure_lux
 
 
 def _pick_stream(data: dict) -> tuple[str | None, str, int | None]:
@@ -82,7 +193,7 @@ class LuxEngine:
     stage = 30
 
     def available(self) -> bool:
-        return _ensure_lux()
+        return ensure_lux()
 
     def version(self) -> str:
         if not LUX_BIN.is_file():
@@ -90,15 +201,15 @@ class LuxEngine:
         try:
             proc = subprocess.run([str(LUX_BIN), "-v"], capture_output=True, text=True, timeout=5)
             line = (proc.stdout or proc.stderr or "").strip().splitlines()
-            return (line[0] if line else "0.24.1")[:80]
+            return (line[0] if line else LUX_VERSION)[:80]
         except Exception:
-            return "0.24.1"
+            return LUX_VERSION
 
     def matches(self, url: str) -> bool:
         return is_douyin(url) or is_kuaishou(url)
 
     def extract(self, url: str) -> dict:
-        if not _ensure_lux():
+        if not ensure_lux():
             return {"ok": False, "error": "lux 二进制不可用"}
         try:
             proc = subprocess.run(
@@ -148,3 +259,12 @@ class LuxEngine:
             "needs_merge": False,
             "page_url": url,
         }
+
+
+if __name__ == "__main__":
+    name, url = resolve_lux_asset()
+    print(f"asset={name}")
+    print(f"url={url}")
+    print(f"bin={lux_bin_path()}")
+    ok = ensure_lux()
+    print(f"ensure_lux={ok}")

@@ -33,31 +33,50 @@
 
 ## 快速开始
 
+### macOS / Linux
+
 ```bash
 cd video-unwatermark
 chmod +x start.sh
 ./start.sh
 ```
 
+### Windows
+
+```powershell
+cd video-unwatermark
+.\start.ps1
+# 或: start.bat
+```
+
 浏览器打开 **http://127.0.0.1:8787**。
 
-手动安装：
+手动安装（任意系统）：
 
 ```bash
 python3 -m venv .venv
+# Windows: py -3 -m venv .venv && .venv\Scripts\activate
 source .venv/bin/activate
 pip install -r requirements.txt
 # optional: pip install videofetch you-get
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-系统需有 `ffmpeg`（yt-dlp 合并音视频）。Debian/Ubuntu：
+系统需有 `ffmpeg`（yt-dlp 合并音视频）：
 
 ```bash
+# macOS
+brew install ffmpeg
+
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+
+# Windows（任选其一；可能需要管理员权限）
+winget install --id Gyan.FFmpeg -e
+# choco install ffmpeg
 ```
 
-`start.sh` 会尝试安装可选引擎（`videofetch`、`you-get`、Playwright），并在缺少时下载 Linux amd64 版 `lux` 到 `bin/`。
+`start.sh` / `start.ps1` 会尝试安装可选引擎（`videofetch`、`you-get`、Playwright），并在缺少时按当前系统自动下载对应平台的 `lux` v0.24.1（Linux / macOS / Windows，x86_64 或 arm64）到 `bin/`。
 
 ## API
 
@@ -104,8 +123,13 @@ sudo apt-get install ffmpeg
 1. **启动参数**
 
 ```bash
+# macOS / Linux
 ./start.sh --cookies /path/to/cookies.txt
 ./start.sh --cookies-from-browser chrome
+
+# Windows PowerShell
+.\start.ps1 -Cookies C:\path\to\cookies.txt
+.\start.ps1 -CookiesFromBrowser chrome
 ```
 
    `cookies_from_browser` 只能读**本机**已安装浏览器。远程服务器无你的浏览器配置时无效。

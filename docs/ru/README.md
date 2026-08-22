@@ -39,6 +39,8 @@ chmod +x start.sh
 ./start.sh
 ```
 
+Windows: `.\start.ps1` (или `start.bat`).
+
 Откройте **http://127.0.0.1:8787**.
 
 Ручная установка:
@@ -51,13 +53,18 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-`ffmpeg` должен быть в `PATH` (слияние аудио/видео yt-dlp). Debian/Ubuntu:
+`ffmpeg` должен быть в `PATH` (слияние аудио/видео yt-dlp):
 
 ```bash
+# macOS
+brew install ffmpeg
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+# Windows
+winget install --id Gyan.FFmpeg -e
 ```
 
-`start.sh` также пытается поставить опциональные движки (`videofetch`, `you-get`, Playwright) и скачивает `lux` Linux amd64 в `bin/` при отсутствии.
+`start.sh` (macOS/Linux) или `start.ps1` (Windows) также пытается поставить опциональные движки (`videofetch`, `you-get`, Playwright) и скачивает подходящий `lux` для вашей ОС/CPU в `bin/` при отсутствии.
 
 ## API
 

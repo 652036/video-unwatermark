@@ -20,7 +20,10 @@ cookies.txt
 .env.*
 
 bin/lux
+bin/lux.exe
 bin/.lux.tgz
+bin/.lux.zip
+bin/.lux.*
 !bin/.gitkeep
 
 smoke_*.json

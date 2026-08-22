@@ -39,6 +39,8 @@ chmod +x start.sh
 ./start.sh
 ```
 
+Windows: `.\start.ps1`（または `start.bat`）。
+
 **http://127.0.0.1:8787** を開きます。
 
 手動インストール：
@@ -51,13 +53,18 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-`ffmpeg` が `PATH` にあること（yt-dlp の音声／映像結合用）。Debian/Ubuntu：
+`ffmpeg` が `PATH` にあること（yt-dlp の音声／映像結合用）：
 
 ```bash
+# macOS
+brew install ffmpeg
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+# Windows
+winget install --id Gyan.FFmpeg -e
 ```
 
-`start.sh` は任意エンジン（`videofetch`、`you-get`、Playwright）の導入も試し、なければ Linux amd64 の `lux` を `bin/` に取得します。
+`start.sh`（macOS/Linux）または `start.ps1`（Windows）は任意エンジン（`videofetch`、`you-get`、Playwright）の導入も試し、なければ現在の OS/CPU 向け `lux` を `bin/` に取得します。
 
 ## API
 

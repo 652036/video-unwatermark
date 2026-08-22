@@ -41,6 +41,8 @@ chmod +x start.sh
 ./start.sh
 ```
 
+Windows: `.\start.ps1` (أو `start.bat`).
+
 افتح **http://127.0.0.1:8787**.
 
 تثبيت يدوي:
@@ -53,13 +55,18 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-يجب أن يكون `ffmpeg` في `PATH` (دمج الصوت/الفيديو عبر yt-dlp). على Debian/Ubuntu:
+يجب أن يكون `ffmpeg` في `PATH` (دمج الصوت/الفيديو عبر yt-dlp):
 
 ```bash
+# macOS
+brew install ffmpeg
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+# Windows
+winget install --id Gyan.FFmpeg -e
 ```
 
-يحاول `start.sh` أيضًا تثبيت المحركات الاختيارية (`videofetch` و`you-get` وPlaywright) وتنزيل `lux` لنظام Linux amd64 إلى `bin/` عند الحاجة.
+يحاول `start.sh` (macOS/Linux) أو `start.ps1` (Windows) أيضًا تثبيت المحركات الاختيارية (`videofetch` و`you-get` وPlaywright) وتنزيل `lux` المناسب لنظامك/معالجك إلى `bin/` عند الحاجة.
 
 ## واجهة البرمجة API
 

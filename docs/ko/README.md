@@ -39,6 +39,8 @@ chmod +x start.sh
 ./start.sh
 ```
 
+Windows: `.\start.ps1` (또는 `start.bat`).
+
 **http://127.0.0.1:8787** 을 엽니다.
 
 수동 설치：
@@ -51,13 +53,18 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-`ffmpeg`가 `PATH`에 있어야 합니다(yt-dlp 음/영상 병합). Debian/Ubuntu：
+`ffmpeg`가 `PATH`에 있어야 합니다(yt-dlp 음/영상 병합):
 
 ```bash
+# macOS
+brew install ffmpeg
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+# Windows
+winget install --id Gyan.FFmpeg -e
 ```
 
-`start.sh`는 선택 엔진(`videofetch`, `you-get`, Playwright) 설치를 시도하고, 없으면 Linux amd64 `lux`를 `bin/`에 받습니다.
+`start.sh`(macOS/Linux) 또는 `start.ps1`(Windows)는 선택 엔진(`videofetch`, `you-get`, Playwright) 설치를 시도하고, 없으면 현재 OS/CPU용 `lux`를 `bin/`에 받습니다.
 
 ## API
 

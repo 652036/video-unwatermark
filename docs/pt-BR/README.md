@@ -39,6 +39,8 @@ chmod +x start.sh
 ./start.sh
 ```
 
+Windows: `.\start.ps1` (ou `start.bat`).
+
 Abra **http://127.0.0.1:8787**.
 
 Instalação manual:
@@ -51,13 +53,18 @@ pip install -r requirements.txt
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-`ffmpeg` deve estar no `PATH` (yt-dlp mescla áudio/vídeo). No Debian/Ubuntu:
+`ffmpeg` deve estar no `PATH` (yt-dlp mescla áudio/vídeo):
 
 ```bash
+# macOS
+brew install ffmpeg
+# Debian / Ubuntu
 sudo apt-get install ffmpeg
+# Windows
+winget install --id Gyan.FFmpeg -e
 ```
 
-`start.sh` também tenta instalar engines opcionais (`videofetch`, `you-get`, Playwright) e baixa o `lux` Linux amd64 em `bin/` se faltar.
+`start.sh` (macOS/Linux) ou `start.ps1` (Windows) também tenta instalar engines opcionais (`videofetch`, `you-get`, Playwright) e baixa o `lux` adequado ao seu SO/CPU em `bin/` se faltar.
 
 ## API
 

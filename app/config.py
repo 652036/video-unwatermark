@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DOWNLOAD_DIR = ROOT / "downloads"
 STATIC_DIR = ROOT / "static"
 COOKIE_UPLOAD_DIR = DOWNLOAD_DIR / ".cookies"
-LUX_BIN = ROOT / "bin" / "lux"
+LUX_BIN = ROOT / "bin" / ("lux.exe" if sys.platform == "win32" else "lux")
 
 ENGINE_TIMEOUT = 25.0
 OVERALL_TIMEOUT = 30.0
