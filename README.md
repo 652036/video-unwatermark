@@ -1,12 +1,37 @@
-# 无水印解析下载
+# video-unwatermark
+
+Paste a **public** video share text or URL. The server races several extractors in parallel and returns a direct link (preferably without platform watermark) so you can download the original file.
+
+<p align="center">
+  <a href="README.md">EN</a> ·
+  <a href="docs/zh-CN/README.md">zh-CN</a> ·
+  <a href="docs/ja/README.md">ja</a> ·
+  <a href="docs/ko/README.md">ko</a> ·
+  <a href="docs/es/README.md">es</a> ·
+  <a href="docs/fr/README.md">fr</a> ·
+  <a href="docs/de/README.md">de</a> ·
+  <a href="docs/pt-BR/README.md">pt-BR</a> ·
+  <a href="docs/ru/README.md">ru</a> ·
+  <a href="docs/ar/README.md">ar</a>
+</p>
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688.svg)](https://fastapi.tiangolo.com/)
 
-粘贴公开视频分享口令或链接，服务端并行调用多个解析引擎，提取尽量无水印 / 原片的直链并下载。
+**Public UGC only.** Membership / DRM platforms (Tencent Video, iQIYI, Youku, Mango TV, Netflix, Disney+, HBO, Prime Video, Spotify, Hulu, and similar) are refused before any extractor runs. This project does not steal logins, phish cookies, or MITM WeChat Channels.
 
-**仅支持公开 UGC。** 腾讯视频、爱奇艺、优酷、芒果、Netflix、Disney+、HBO、Prime Video、Spotify 等会员 / DRM 平台会被直接拒绝。不做登录盗取、Cookie 钓鱼或微信视频号中间人。
+## Features
 
-## 如何运行
+- Web UI at `http://127.0.0.1:8787` — paste share text or a URL, preview, download
+- Multi-engine race: first successful extractor wins; others are cancelled
+- Engines: `share-page`, `douyin-browser` (headless Chrome), `yt-dlp`, `videofetch`, `you-get`, `webparser`, `lux`
+- Extracts the first `http(s)` URL from clipboard-style share slogans
+- Optional local Netscape cookies / `--cookies-from-browser` as a **last resort** (never fetched for you)
+- Explicit block list for VIP / DRM hosts; WeChat Channels login/MITM capture refused
+- JSON API: parse, download, health, engines, OpenAPI at `/api/docs`
+
+## Quick Start
 
 ```bash
 cd video-unwatermark
@@ -14,83 +39,107 @@ chmod +x start.sh
 ./start.sh
 ```
 
-浏览器打开 `http://127.0.0.1:8787`。
+Open **http://127.0.0.1:8787**.
 
-手动方式：
+Manual install:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-# 可选：pip install videofetch you-get
+# optional: pip install videofetch you-get
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8787
 ```
 
-需要系统里有 `ffmpeg`（yt-dlp 合并音视频用）。Debian/Ubuntu：`sudo apt-get install ffmpeg`。
+`ffmpeg` should be on `PATH` (yt-dlp uses it to merge audio/video). On Debian/Ubuntu:
 
-## 最后手段：本机 Cookies（仅当分享页 / 兜底仍失败）
+```bash
+sudo apt-get install ffmpeg
+```
 
-部分站点（尤其是抖音）会从机房 IP 拦截游客解析，返回 `needs cookie`。本工具**不会**替你去网站拿 Cookie，也**不要**把 Cookie 粘贴到聊天里。
+`start.sh` also tries to install optional engines (`videofetch`, `you-get`, Playwright) and downloads the `lux` Linux amd64 release into `bin/` when missing.
 
-只在你自己的电脑上，用下列任一方式提供**你自己**的 Netscape cookies：
+## Screenshot
 
-1. **启动参数**（等价于 yt-dlp `--cookies` / `--cookies-from-browser`）
+![Web UI](docs/images/ui.png)
+
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/parse` | Body `{"url":"..."}` or multipart (`url`, optional `cookies_file`, `cookies_from_browser`) |
+| `GET` | `/api/download?job=...` | Attachment download for a parse job |
+| `GET` | `/api/preview?job=...` | Stream preview for a job |
+| `GET` | `/api/health` | Engine + ffmpeg status; cookie flags only say *configured*, never contents |
+| `GET` | `/api/engines` | Engine list |
+| `GET` | `/api/docs` | OpenAPI UI |
+
+Success payload includes `ok`, `title`, `ext`, `filesize`, `thumbnail`, `extractor`, `platform`, `download_url`, `direct_url`, `preview_url`, `job`. Guest blocks may return `{ok:false, needs_cookie:true, hint:"..."}`.
+
+Timeouts: ~25s per engine, ~30s overall; Douyin/Kuaishou first race share-page + webparser + lux + `douyin-browser` (~25s), overall up to ~95s.
+
+## Supported platforms & limits
+
+| Engine | Typical sites | Notes |
+|---|---|---|
+| **share-page** | Douyin, Kuaishou | Guest share-page HTML (`_ROUTER_DATA` / `__APOLLO_STATE__`); no login cookie |
+| **douyin-browser** | Douyin | Headless Chrome; captures CDN `video_mp4` from `iesdouyin.com/share/video/{id}/` |
+| **yt-dlp** | YouTube, Bilibili, TikTok, Instagram, X, Facebook, Reddit, Weibo, Vimeo, … | Follow [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) |
+| **videofetch** | Douyin, Kuaishou, Xiaohongshu, Bilibili, … | Public-UGC clients only; VIP movie clients disabled |
+| **you-get** | Some CN / social sites | Extra fallback parser |
+| **webparser** | Douyin, Kuaishou | Keyless public JSON helpers (e.g. 17change, douyin.wtf hybrid) |
+| **lux** | Douyin, Kuaishou | Local `bin/lux` binary; fallback only |
+
+Platform APIs change often; parse failures are normal. Login-walled content may return `needs_cookie`.
+
+**Known limitations (honest):**
+
+- **Douyin**: datacenter IPs often lack `play_addr` on share pages; yt-dlp may report `needs cookie`. Public hybrid parsers or `douyin-browser` may still succeed. Cookies are never stolen.
+- **Kuaishou**: yt-dlp has no Kuaishou extractor. Existing `www.kuaishou.com/short-video/{id}` pages may parse via webparser; `v.kuaishou.com` shorts often expire; TLS EOF from some hosts is common.
+- **Vimeo**: anonymous macos OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
+- **YouTube**: some IPs hit a bot wall (`Sign in to confirm you’re not a bot`); same optional local cookies apply.
+
+Smoke-test notes: [docs/test-results.md](docs/test-results.md)
+
+## Optional cookies (last resort)
+
+Some sites (especially Douyin / YouTube bot walls) block anonymous datacenter access. This tool **will not** obtain cookies for you. Do **not** paste cookies into chat.
+
+On **your own machine**, provide **your own** Netscape cookies:
+
+1. **CLI** (same idea as yt-dlp `--cookies` / `--cookies-from-browser`):
 
    ```bash
    ./start.sh --cookies /path/to/cookies.txt
    ./start.sh --cookies-from-browser chrome
    ```
 
-   `cookies_from_browser` 只能读**本机**已安装浏览器的登录态（chrome / chromium / firefox / edge / brave / safari 等）。在远程服务器上无效。
+   `cookies_from_browser` only reads browsers installed on **that** machine. Useless on a remote VPS without your profile.
 
-2. **环境变量**
+2. **Environment**
 
    ```bash
    export UNWATERMARK_COOKIES=/path/to/cookies.txt
-   export UNWATERMARK_COOKIES_FROM_BROWSER=chrome   # 可选，仅本机
+   export UNWATERMARK_COOKIES_FROM_BROWSER=chrome   # optional, local only
    ./start.sh
    ```
 
-3. **网页 / API**
+3. **Web / API** — expand “Local Cookies” on the page, upload Netscape `cookies.txt` (e.g. via [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)), or set `cookies_from_browser`. JSON cookie exports are rejected.
 
-   - 页面可展开「本机 Cookies」，上传 Netscape `cookies.txt`（可用扩展 [Get cookies.txt LOCALLY](https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc) 自行导出），或选择 `cookies_from_browser`。
-   - `POST /api/parse` JSON：`{"url":"...","cookies_path":"/abs/path/cookies.txt","cookies_from_browser":"chrome"}`
-   - 或 `multipart/form-data` 字段：`url`、`cookies_file`（文件）、`cookies_from_browser`
+Uploaded files are used only for that parse/download; they are not traded to third-party ticket APIs.
 
-不要上传 JSON 格式的 Cookie 导出。文件只在本次解析/下载中使用，不会去外站换票。
+## Architecture
 
-## API
+FastAPI serves `static/` and JSON routes. `app/extract.py` expands short links, rejects blocked hosts, then runs staged engine races (`share-page` / `douyin-browser` / core / fallback). The first `ok` result creates a short-lived job; `/api/download` materializes the file (with ffmpeg merge when needed). Details: [docs/architecture.md](docs/architecture.md). Docs index: [docs/README.md](docs/README.md).
 
-- `POST /api/parse`  body `{"url":"..."}` — 可从分享口令里正则抽出第一条 http(s) 链接
-- 返回 `{ok, title, ext, filesize, thumbnail, extractor, platform, download_url, direct_url}`
-- 游客被拦时：`{ok:false, needs_cookie:true, hint:"..."}`
-- `GET /api/download?job=...` — 按文件名附件下载
-- `GET /api/health` — 引擎与 ffmpeg 状态；`cookies.file_configured` / `cookies.browser_configured` 只报是否已配置，不回传内容
-- `GET /api/engines` — 引擎列表
+## Contributing
 
-解析超时：单引擎约 25 秒，整体约 30 秒；抖音/快手先并发分享页 + webparser + lux，再跑 `douyin-browser`（约 25 秒），整体最多约 95 秒。多引擎并行，先成功者胜出，其余取消。yt-dlp 的 `needs cookie` 不会挡住 webparser / douyin-browser：抖音在浏览器引擎跑完或超时前不会用这句话收场。
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
-## 支持站点
+## License
 
-- **douyin-browser（抖音，stage 15）**：无登录 headless Chrome。打开 `iesdouyin.com/share/video/{id}/`（必须带尾斜杠），从网络/Performance 抓 `zjcdn` / `mime_type=video_mp4` 直链，Range GET 校验。不点登录框、不读用户 Cookie。
-- **share-page（抖音/快手先发）**：从分享口令抽出 aweme / photoId，跟 `v.douyin.com` / `v.kuaishou.com` 短链。抖音用手机 UA 拉 `iesdouyin.com/share/video/{id}`，解析 `_ROUTER_DATA` / `RENDER_DATA`，`playwm`→`play`。快手跟到分享页后解析 `__APOLLO_STATE__` / `INIT_STATE` / `<video src>` / CDN mp4。不依赖登录 Cookie。
-- **yt-dlp**：1700+ 站点（YouTube、B站、TikTok、Instagram、X、Facebook、Reddit、Vimeo、微博等），以 [yt-dlp 支持列表](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) 为准。
-- **videofetch (videodl)**：国内短视频补强（抖音、快手、小红书、B站等），已禁用其会员站客户端。
-- **you-get**：部分国内站的额外解析器
-- **webparser（抖音/快手先发 + 兜底）**：与分享页同一轮竞速，再在 yt-dlp `needs cookie` 之后仍会再跑一轮。简单无密钥 JSON：17change `/parse/video`、Evil0ctal `douyin.wtf/api/hybrid/video_data`、yujn `/api/dy_jx.php`、tenapi `/v2/video`。v2ob / snapany / hellotik 未暴露无密钥简单接口，已跳过。不会把抖音 ID 猜成 TikTok。
-- **lux（兜底）**：`bin/lux`（GitHub release 的 Linux amd64 资产，不是 git clone），只对抖音/快手 URL 调用。
+[Apache License 2.0](LICENSE) — Copyright 2026 652036. Third-party engines remain under their own licenses; see [NOTICE](NOTICE).
 
-平台接口经常变，解析失败是正常现象。需要登录的内容会返回 `needs cookie`。
+## Disclaimer
 
-**已知限制（诚实记录）：**
-
-- 抖音：机房 IP 上分享页 `_ROUTER_DATA` 往往没有 `play_addr`，yt-dlp 会 `needs cookie`。本轮会先并发打公共 JSON（17change 对抖音目前 5001；`douyin.wtf` hybrid 仍可能给出 `nwm_video_url`）。不会去偷 Cookie。
-- 快手：yt-dlp 没有快手提取器。现存 `www.kuaishou.com/short-video/{id}` 可由 webparser 解析；`v.kuaishou.com` 短链常过期，且机房访问 kuaishou.com 会偶发 TLS EOF。登录墙时仍可能 `needs cookie`。
-- Vimeo：匿名 macos OAuth 已 401，没有不登录的简单修复。本机已登录时可用 `--cookies-from-browser` + web client。
-- YouTube：机房 IP 可能 bot wall（`Sign in to confirm you’re not a bot`），同样走可选本机 cookies。
-
-## 免责声明
-
-请只下载你有权保存的公开内容，并遵守各平台条款与当地法律。本项目不提供会员破解、DRM 解密或未授权访问。
-
-实测记录见 [TEST.md](TEST.md)。
+Download only public content you have the right to save. Respect each platform’s terms and local law. This project does **not** provide membership cracking, DRM decryption, or unauthorized access.
