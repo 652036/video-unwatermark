@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>无水印解析 · 公开视频下载</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <main class="wrap">
+    <header>
+      <p class="eyebrow">PUBLIC UGC ONLY</p>
+      <h1>无水印解析</h1>
+      <p class="lead">粘贴抖音 / B站 / 快手 / 小红书 / 微博 / YouTube / TikTok 等<strong>公开</strong>分享口令或链接，提取原片直链。</p>
+    </header>
+
+    <section class="card">
+      <label for="url">分享口令或链接</label>
+      <textarea id="url" rows="4" placeholder="例如：5.78 复制打开抖音，看看… https://v.douyin.com/xxxx/&#10;或直接粘贴 https://www.bilibili.com/video/BVxxxx"></textarea>
+      <details class="cookie-opt">
+        <summary>可选：本机 Cookies（游客被拦时）</summary>
+        <p class="fine">只使用你自己导出的 Netscape <code>cookies.txt</code>，或在<strong>本机运行本服务</strong>时从浏览器读取。不要把 Cookie 发给任何人，也不要粘贴到聊天里。本站不会去任何网站代你获取登录态。</p>
+        <label for="cookiesFile">Cookies 文件（Netscape）</label>
+        <input id="cookiesFile" type="file" accept=".txt,text/plain" />
+        <label for="cookiesBrowser">从本机浏览器读取</label>
+        <select id="cookiesBrowser">
+          <option value="">不使用</option>
+          <option value="chrome">Chrome</option>
+          <option value="chromium">Chromium</option>
+          <option value="firefox">Firefox</option>
+          <option value="edge">Edge</option>
+          <option value="brave">Brave</option>
+          <option value="safari">Safari</option>
+        </select>
+        <p class="fine" id="cookieHint">cookies_from_browser 仅在这台电脑上跑服务时有效。</p>
+      </details>
+      <div class="row">
+        <button id="paste" type="button" class="ghost">粘贴</button>
+        <button id="parse" type="button" class="primary">解析</button>
+      </div>
+      <p id="status" class="status" hidden></p>
+    </section>
+
+    <section id="result" class="card result" hidden>
+      <video id="preview" controls playsinline preload="metadata" hidden></video>
+      <p id="previewHint" class="muted" hidden></p>
+      <img id="thumb" alt="" />
+      <div>
+        <p class="meta"><span id="platform"></span><span id="engine"></span></p>
+        <h2 id="title"></h2>
+        <p id="info" class="muted"></p>
+        <a id="dl" class="primary btn" href="#">下载视频</a>
+      </div>
+    </section>
+
+    <section class="card muted-card">
+      <h3>可用引擎</h3>
+      <ul id="engines" class="engines"></ul>
+      <p class="fine">抖音/快手先走分享页（不要求登录 Cookie），再 yt-dlp / videofetch / you-get，最后 webparser / lux。Cookie 只是最后手段。</p>
+    </section>
+
+    <footer>
+      <p>只处理公开、你有权保存的内容。不支持腾讯视频、爱奇艺、优酷、芒果、Netflix、Disney+、HBO、Prime Video、Spotify 等会员 / DRM。不做登录盗取、Cookie 钓鱼或视频号中间人。</p>
+    </footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

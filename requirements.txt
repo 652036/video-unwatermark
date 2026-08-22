@@ -1,0 +1,10 @@
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+yt-dlp==2026.7.4
+httpx==0.28.1
+pydantic==2.13.4
+python-multipart==0.0.32
+# optional engines (installed by start.sh if possible)
+# videofetch==0.9.1
+# you-get==0.4.1743
+playwright>=1.50
