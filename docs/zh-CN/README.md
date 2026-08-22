@@ -59,10 +59,6 @@ sudo apt-get install ffmpeg
 
 `start.sh` 会尝试安装可选引擎（`videofetch`、`you-get`、Playwright），并在缺少时下载 Linux amd64 版 `lux` 到 `bin/`。
 
-## 截图
-
-![Web UI](../images/ui.png)
-
 ## API
 
 | 方法 | 路径 | 说明 |
@@ -98,8 +94,6 @@ sudo apt-get install ffmpeg
 - **快手**：yt-dlp 无快手提取器。现存 `www.kuaishou.com/short-video/{id}` 可由 webparser 解析；`v.kuaishou.com` 短链常过期；部分环境会 TLS EOF。
 - **Vimeo**：匿名 macos OAuth 目前 401；本机已登录可用 `--cookies-from-browser`。
 - **YouTube**：部分 IP 会遇 bot wall；同样走可选本机 Cookie。
-
-实测记录：[../test-results.md](../test-results.md)
 
 ## 可选 Cookies（最后手段）
 

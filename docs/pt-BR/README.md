@@ -59,10 +59,6 @@ sudo apt-get install ffmpeg
 
 `start.sh` também tenta instalar engines opcionais (`videofetch`, `you-get`, Playwright) e baixa o `lux` Linux amd64 em `bin/` se faltar.
 
-## Captura de tela
-
-![Web UI](../images/ui.png)
-
 ## API
 
 | Method | Path | Description |
@@ -98,8 +94,6 @@ As APIs das plataformas mudam com frequência; falhas são normais. Conteúdo at
 - **Kuaishou**: yt-dlp has no Kuaishou extractor. Existing `www.kuaishou.com/short-video/{id}` pages may parse via webparser; `v.kuaishou.com` shorts often expire; TLS EOF from some hosts is common.
 - **Vimeo**: anonymous macos OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
 - **YouTube**: some IPs hit a bot wall (`Sign in to confirm you’re not a bot`); same optional local cookies apply.
-
-Notas de teste: [../test-results.md](../test-results.md)
 
 ## Cookies opcionais (último recurso)
 

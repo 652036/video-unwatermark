@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - English landing README and multi-language docs (zh-CN, ja, ko, es, fr, de, pt-BR, ru, ar)
 - Architecture notes, contributing / security policies, issue templates
-- Smoke-test notes moved to `docs/test-results.md`
 
 ## [1.1.0] - 2026-08
 

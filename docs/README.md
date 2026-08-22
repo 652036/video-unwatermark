@@ -18,7 +18,6 @@
 | [../README.md](../README.md) | English landing page |
 | [architecture.md](architecture.md) | How extractors race and jobs work (EN) |
 | [zh-CN/architecture.md](zh-CN/architecture.md) | Architecture (简体中文) |
-| [test-results.md](test-results.md) | Honest smoke-test notes / known limits |
 | [zh-CN/README.md](zh-CN/README.md) | 简体中文 |
 | [ja/README.md](ja/README.md) | 日本語 |
 | [ko/README.md](ko/README.md) | 한국어 |

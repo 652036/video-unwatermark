@@ -59,10 +59,6 @@ sudo apt-get install ffmpeg
 
 `start.sh` also tries to install optional engines (`videofetch`, `you-get`, Playwright) and downloads the `lux` Linux amd64 release into `bin/` when missing.
 
-## Screenshot
-
-![Web UI](docs/images/ui.png)
-
 ## API
 
 | Method | Path | Description |
@@ -98,8 +94,6 @@ Platform APIs change often; parse failures are normal. Login-walled content may 
 - **Kuaishou**: yt-dlp has no Kuaishou extractor. Existing `www.kuaishou.com/short-video/{id}` pages may parse via webparser; `v.kuaishou.com` shorts often expire; TLS EOF from some hosts is common.
 - **Vimeo**: anonymous macos OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
 - **YouTube**: some IPs hit a bot wall (`Sign in to confirm you’re not a bot`); same optional local cookies apply.
-
-Smoke-test notes: [docs/test-results.md](docs/test-results.md)
 
 ## Optional cookies (last resort)
 

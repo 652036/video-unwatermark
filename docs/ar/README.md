@@ -61,10 +61,6 @@ sudo apt-get install ffmpeg
 
 يحاول `start.sh` أيضًا تثبيت المحركات الاختيارية (`videofetch` و`you-get` وPlaywright) وتنزيل `lux` لنظام Linux amd64 إلى `bin/` عند الحاجة.
 
-## لقطة شاشة
-
-![Web UI](../images/ui.png)
-
 ## واجهة البرمجة API
 
 | Method | Path | Description |
@@ -100,8 +96,6 @@ sudo apt-get install ffmpeg
 - **Kuaishou**: yt-dlp has no Kuaishou extractor. Existing `www.kuaishou.com/short-video/{id}` pages may parse via webparser; `v.kuaishou.com` shorts often expire; TLS EOF from some hosts is common.
 - **Vimeo**: anonymous macos OAuth currently returns 401; use local `--cookies-from-browser` if you are logged in.
 - **YouTube**: some IPs hit a bot wall (`Sign in to confirm you’re not a bot`); same optional local cookies apply.
-
-ملاحظات الاختبار: [../test-results.md](../test-results.md)
 
 ## ملفات تعريف الارتباط الاختيارية (حل أخير)
 
