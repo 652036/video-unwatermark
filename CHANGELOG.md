@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-08-22
+
 ### Added
 
 - Cross-platform lux bootstrap: automatically selects the correct v0.24.1 release asset for Linux, macOS (Darwin), and Windows (x86_64 and arm64). Windows uses `lux.exe` with zip extraction.
