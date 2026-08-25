@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Byte-compile app
+        run: python -m compileall -q app
+      # Playwright is imported lazily in engines/douyin_browser.py; skip browser install.
+      - name: Import FastAPI app
+        run: python -c "from app.main import app; print(app.title)"
+      - name: Pure helper checks
+        run: |
+          python -c '
+          from app.util import extract_url, hostname_of, is_blocked, sanitize_filename, is_hls
+          from app.urls import is_douyin, is_kuaishou, aweme_id_of, photo_id_of, ytdlp_url
+          assert extract_url("see https://www.douyin.com/video/123") == "https://www.douyin.com/video/123"
+          assert hostname_of("https://www.douyin.com/video/1") == "douyin.com"
+          assert is_blocked("https://www.netflix.com/title/1") == "Netflix"
+          assert is_blocked("https://www.douyin.com/video/1") is None
+          assert sanitize_filename("a:b/c") == "a_b_c"
+          assert is_hls("https://cdn.example/a.m3u8")
+          assert is_douyin("https://www.iesdouyin.com/share/video/1")
+          assert is_kuaishou("https://www.kuaishou.com/short-video/abc")
+          assert aweme_id_of("https://www.douyin.com/video/987654") == "987654"
+          assert photo_id_of("https://www.kuaishou.com/short-video/photoXYZ") == "photoXYZ"
+          assert ytdlp_url("https://www.iesdouyin.com/share/video/987654") == "https://www.douyin.com/video/987654"
+          print("helper checks ok")
+          '

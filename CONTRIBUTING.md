@@ -27,6 +27,7 @@ Useful endpoints: `/`, `/api/health`, `/api/engines`, `/api/docs`.
 3. Update docs if behavior changes (especially README limitations).
 4. Do not commit `.venv/`, `downloads/`, `bin/lux`, cookies, or smoke JSON dumps.
 5. Fill the PR template.
+6. CI must pass.
 
 ## Issues
 
