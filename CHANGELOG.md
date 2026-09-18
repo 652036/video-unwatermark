@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve percent-encoded path and query data while extracting share URLs, including signed parameters and encoded punctuation.
+- Match Douyin and Kuaishou hosts only at domain-label boundaries, avoiding accidental routing of unrelated lookalike domains.
+- Normalize a trailing DNS root dot consistently for platform identification and the existing blocked-host checks.
+
+### Added
+
+- Offline URL regression tests, executed by CI without real video requests or cookies.
+
 ## [1.2.0] - 2026-08-22
 
 ### Added

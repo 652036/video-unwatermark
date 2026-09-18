@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 from .config import BLOCKED_HOSTS, PLATFORM_HINTS, WECHAT_CHANNELS_HINTS
 
@@ -25,7 +25,9 @@ def extract_url(text: str) -> str | None:
 
 
 def _clean_url(url: str) -> str:
-    url = unquote(url.strip())
+    # Decoding an entire URL changes reserved delimiters and signed payloads.
+    # Remove surrounding share-text punctuation without touching percent escapes.
+    url = url.strip()
     url = url.rstrip(TRAIL_PUNCT)
     # chinese share links sometimes wrap the URL in extra full-width slash
     url = url.rstrip("/").rstrip(TRAIL_PUNCT)
@@ -37,7 +39,7 @@ def _clean_url(url: str) -> str:
 
 def hostname_of(url: str) -> str:
     try:
-        host = (urlparse(url).hostname or "").lower()
+        host = (urlparse(url).hostname or "").lower().rstrip(".")
     except Exception:
         return ""
     if host.startswith("www."):

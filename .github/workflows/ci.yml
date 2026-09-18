@@ -23,6 +23,8 @@ jobs:
           pip install -r requirements.txt
       - name: Byte-compile app
         run: python -m compileall -q app
+      - name: Offline URL regression tests
+        run: python -m unittest discover -s tests -v
       # Playwright is imported lazily in engines/douyin_browser.py; skip browser install.
       - name: Import FastAPI app
         run: python -c "from app.main import app; print(app.title)"
