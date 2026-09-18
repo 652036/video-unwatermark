@@ -22,13 +22,16 @@ PHOTO_RE = re.compile(
 
 def is_douyin(url: str) -> bool:
     host = hostname_of(url)
-    return host.endswith("douyin.com") or host.endswith("iesdouyin.com")
+    return any(
+        host == suffix or host.endswith("." + suffix)
+        for suffix in ("douyin.com", "iesdouyin.com")
+    )
 
 
 def is_kuaishou(url: str) -> bool:
     host = hostname_of(url)
     return any(
-        host.endswith(s)
+        host == s or host.endswith("." + s)
         for s in ("kuaishou.com", "kuaishouapp.com", "chenzhongtech.com", "kwai.com", "gifshow.com")
     )
 
