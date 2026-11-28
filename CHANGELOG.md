@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) where tagged.
 
+## [1.2.1]
+
+### Fixed
+
+- **Douyin download speed (5x–6x faster)**: added dedicated HTTP/1.1 multi-socket download client (`downloadH1`) to bypass per-TCP-connection CDN throttling caused by HTTP/2 multiplexing, reused the resolved 302 CDN URL once during probe (`Range: bytes=0-1`), and switched to an adaptive work-stealing segment queue (4–8 workers for files ≥ 512 KB).
+- **Douyin first-try auto extraction**: added `douyinvod.com`, `zjcdn.com`, and `/video/tos/` CDN recognition, hydrated `window._ROUTER_DATA` capture, muted `<video>` play nudge, `performance.getEntriesByType('resource')` scanning, and real mobile viewport layout in background `WebViewSniffer` so Douyin no longer requires opening the interactive browser.
+
 ## [1.2.0]
 
 ### Added

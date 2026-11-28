@@ -32,44 +32,45 @@ object DouyinExtractor {
         }
     }
 
+    fun parseRouterDataJson(jsonText: String, pageUrl: String): ExtractResult? {
+        return try {
+            val root = JSONObject(jsonText)
+            val item = findItemInfo(root) ?: return null
+            val title = item.optString("desc").ifBlank { "抖音视频" }.lines().first().take(120)
+            val video = item.optJSONObject("video")
+            val playAddr = video?.optJSONObject("play_addr")
+            val urlList = playAddr?.optJSONArray("url_list")
+            val rawDirect = firstHttp(urlList)
+                ?: video?.optString("vid")?.takeIf { it.isNotBlank() }?.let {
+                    "https://aweme.snssdk.com/aweme/v1/play/?video_id=$it&ratio=1080p&line=0"
+                }
+            val cover = firstHttp(video?.optJSONObject("cover")?.optJSONArray("url_list"))
+                ?: firstHttp(video?.optJSONObject("origin_cover")?.optJSONArray("url_list"))
+
+            if (rawDirect.isNullOrBlank()) return null
+            ExtractResult.Success(
+                ExtractedVideo(
+                    title = title,
+                    directUrl = dewatermark(rawDirect),
+                    pageUrl = pageUrl,
+                    platform = "抖音",
+                    engine = "douyin-share",
+                    thumbnailUrl = cover,
+                    headers = mapOf(
+                        "User-Agent" to HttpClients.IPHONE_UA,
+                        "Referer" to "https://www.iesdouyin.com/",
+                    ),
+                )
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun parseShareHtml(html: String, pageUrl: String): ExtractResult? {
         val match = ROUTER_DATA_RE.find(html)
         if (match != null) {
-            try {
-                val root = JSONObject(match.groupValues[1])
-                val item = findItemInfo(root)
-                if (item != null) {
-                    val title = item.optString("desc").ifBlank { "抖音视频" }.lines().first().take(120)
-                    val video = item.optJSONObject("video")
-                    val playAddr = video?.optJSONObject("play_addr")
-                    val urlList = playAddr?.optJSONArray("url_list")
-                    val rawDirect = firstHttp(urlList)
-                        ?: video?.optString("vid")?.takeIf { it.isNotBlank() }?.let {
-                            "https://aweme.snssdk.com/aweme/v1/play/?video_id=$it&ratio=1080p&line=0"
-                        }
-                    val cover = firstHttp(video?.optJSONObject("cover")?.optJSONArray("url_list"))
-                        ?: firstHttp(video?.optJSONObject("origin_cover")?.optJSONArray("url_list"))
-
-                    if (!rawDirect.isNullOrBlank()) {
-                        return ExtractResult.Success(
-                            ExtractedVideo(
-                                title = title,
-                                directUrl = dewatermark(rawDirect),
-                                pageUrl = pageUrl,
-                                platform = "抖音",
-                                engine = "douyin-share",
-                                thumbnailUrl = cover,
-                                headers = mapOf(
-                                    "User-Agent" to HttpClients.IPHONE_UA,
-                                    "Referer" to "https://www.iesdouyin.com/",
-                                ),
-                            )
-                        )
-                    }
-                }
-            } catch (_: Exception) {
-                // Fall through to regex probe
-            }
+            parseRouterDataJson(match.groupValues[1], pageUrl)?.let { return it }
         }
 
         val fallback = VIDEO_MP4_RE.find(html)?.value

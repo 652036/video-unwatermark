@@ -19,6 +19,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.Call
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.BufferedOutputStream
@@ -28,43 +29,52 @@ import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.coroutineContext
 
 /**
  * High-speed cancellable video downloader:
- * - Probes `Range: bytes=0-0` to detect total size and server Range support.
- * - Uses 3–6 parallel HTTP Range workers writing to a cached temp file via FileChannel
- *   (bypasses single-connection CDN throttling and MediaStore IPC overhead).
+ * - Probes `Range: bytes=0-1` once to resolve 302 redirects (e.g. Douyin `/aweme/v1/play/` -> CDN)
+ *   and detect total size + Range support.
+ * - Uses 4–8 parallel HTTP/1.1 workers (independent TCP sockets, avoiding HTTP/2 single-socket
+ *   CDN bandwidth pacing) pulling adaptive 512KB–2MB segments dynamically to eliminate slow-tail stalls.
  * - Hooks every OkHttp Call into coroutine cancellation so canceling immediately aborts
  *   all blocking sockets and deletes partial temp / MediaStore files cleanly.
- * - Falls back cleanly to a 256KB buffered single-stream download when Range is unsupported.
  */
 object MediaDownloader {
     private const val IO_BUF_SIZE = 128 * 1024
     private const val COPY_BUF_SIZE = 256 * 1024
-    private const val MIN_PARALLEL_BYTES = 1_500_000L
+    private const val MIN_PARALLEL_BYTES = 512_000L
     private const val TMP_PREFIX = "ve_dl_"
     private val CONTENT_RANGE_RE = Regex("""bytes\s+\d+-\d+/(\d+)""", RegexOption.IGNORE_CASE)
 
-    data class ProbeInfo(val totalBytes: Long, val supportsRange: Boolean)
+    data class ProbeInfo(
+        val resolvedUrl: String,
+        val totalBytes: Long,
+        val supportsRange: Boolean,
+    )
 
     fun chooseThreadCount(totalBytes: Long): Int = when {
-        totalBytes >= 20L * 1024 * 1024 -> 6
-        totalBytes >= 5L * 1024 * 1024 -> 4
-        totalBytes >= MIN_PARALLEL_BYTES -> 3
+        totalBytes >= 15L * 1024 * 1024 -> 8
+        totalBytes >= 4L * 1024 * 1024 -> 6
+        totalBytes >= MIN_PARALLEL_BYTES -> 4
         else -> 1
     }
 
-    fun computeRanges(totalBytes: Long, threads: Int): List<LongRange> {
+    /**
+     * Splits [totalBytes] into adaptive work-stealing segments (512 KB – 2 MB) so fast
+     * TCP connections automatically pick up remaining segments if one CDN connection slows down.
+     */
+    fun computeSegments(totalBytes: Long, threads: Int): List<LongRange> {
         if (totalBytes <= 0L) return emptyList()
         val n = threads.coerceIn(1, 8)
         if (n == 1) return listOf(0L until totalBytes)
-        val chunkSize = (totalBytes + n - 1) / n
+        val targetSegmentSize = (totalBytes / (n * 3L)).coerceIn(512L * 1024L, 2L * 1024L * 1024L)
         val out = mutableListOf<LongRange>()
         var start = 0L
         while (start < totalBytes) {
-            val end = minOf(start + chunkSize - 1, totalBytes - 1)
+            val end = minOf(start + targetSegmentSize - 1, totalBytes - 1)
             out.add(start..end)
             start = end + 1
         }
@@ -89,10 +99,10 @@ object MediaDownloader {
         }
     }
 
-    private fun baseRequestBuilder(video: ExtractedVideo, cookieHeader: String?): Request.Builder {
-        val builder = Request.Builder().url(video.directUrl)
+    private fun baseRequestBuilder(url: String, headers: Map<String, String>, cookieHeader: String?): Request.Builder {
+        val builder = Request.Builder().url(url)
         var hasUa = false
-        for ((k, v) in video.headers) {
+        for ((k, v) in headers) {
             if (k.equals("User-Agent", ignoreCase = true)) hasUa = true
             builder.header(k, v)
         }
@@ -106,9 +116,13 @@ object MediaDownloader {
     }
 
     /** Executes an OkHttp request while binding cancellation directly to `call.cancel()`. */
-    private suspend inline fun <T> executeCancellable(req: Request, block: (Response) -> T): T {
+    private suspend inline fun <T> executeCancellable(
+        client: OkHttpClient,
+        req: Request,
+        block: (Response) -> T,
+    ): T {
         coroutineContext.ensureActive()
-        val call: Call = HttpClients.download.newCall(req)
+        val call: Call = client.newCall(req)
         val handle = coroutineContext[Job]?.invokeOnCompletion { cause ->
             if (cause != null) {
                 call.cancel()
@@ -126,28 +140,29 @@ object MediaDownloader {
 
     private suspend fun probe(video: ExtractedVideo, cookieHeader: String?): ProbeInfo {
         return try {
-            val req = baseRequestBuilder(video, cookieHeader)
-                .header("Range", "bytes=0-0")
+            val req = baseRequestBuilder(video.directUrl, video.headers, cookieHeader)
+                .header("Range", "bytes=0-1")
                 .get()
                 .build()
-            executeCancellable(req) { resp ->
+            executeCancellable(HttpClients.downloadH1, req) { resp ->
+                val finalUrl = resp.request.url.toString()
                 when (resp.code) {
                     206 -> {
                         val total = parseTotalFromContentRange(resp.header("Content-Range")) ?: -1L
-                        ProbeInfo(totalBytes = total, supportsRange = total > 0L)
+                        ProbeInfo(resolvedUrl = finalUrl, totalBytes = total, supportsRange = total > 0L)
                     }
                     200 -> {
                         val total = resp.header("Content-Length")?.toLongOrNull() ?: -1L
                         val acceptRange = resp.header("Accept-Ranges").orEmpty().contains("bytes", ignoreCase = true)
-                        ProbeInfo(totalBytes = total, supportsRange = acceptRange && total > 0L)
+                        ProbeInfo(resolvedUrl = finalUrl, totalBytes = total, supportsRange = acceptRange && total > 0L)
                     }
-                    else -> ProbeInfo(totalBytes = -1L, supportsRange = false)
+                    else -> ProbeInfo(resolvedUrl = finalUrl, totalBytes = -1L, supportsRange = false)
                 }
             }
         } catch (ce: CancellationException) {
             throw ce
         } catch (_: Exception) {
-            ProbeInfo(totalBytes = -1L, supportsRange = false)
+            ProbeInfo(resolvedUrl = video.directUrl, totalBytes = -1L, supportsRange = false)
         }
     }
 
@@ -172,14 +187,17 @@ object MediaDownloader {
 
         val probeInfo = probe(video, cookieHeader)
         coroutineContext.ensureActive()
+        val effectiveUrl = probeInfo.resolvedUrl
+        val effectiveCookies = HttpClients.webViewCookiesFor(effectiveUrl) ?: cookieHeader
         val threads = if (probeInfo.supportsRange) chooseThreadCount(probeInfo.totalBytes) else 1
 
         if (threads > 1 && probeInfo.totalBytes >= MIN_PARALLEL_BYTES) {
             val tmpFile = File(context.cacheDir, "${TMP_PREFIX}${System.currentTimeMillis()}.$ext.tmp")
             try {
                 downloadParallelToFile(
-                    video = video,
-                    cookieHeader = cookieHeader,
+                    targetUrl = effectiveUrl,
+                    headers = video.headers,
+                    cookieHeader = effectiveCookies,
                     totalBytes = probeInfo.totalBytes,
                     threads = threads,
                     destFile = tmpFile,
@@ -207,18 +225,28 @@ object MediaDownloader {
             }
         }
 
-        downloadSingleStreamToGallery(context, video, cookieHeader, displayName, mimeType, onProgress)
+        downloadSingleStreamToGallery(
+            context = context,
+            targetUrl = effectiveUrl,
+            headers = video.headers,
+            cookieHeader = effectiveCookies,
+            displayName = displayName,
+            mimeType = mimeType,
+            onProgress = onProgress,
+        )
     }
 
     private suspend fun downloadParallelToFile(
-        video: ExtractedVideo,
+        targetUrl: String,
+        headers: Map<String, String>,
         cookieHeader: String?,
         totalBytes: Long,
         threads: Int,
         destFile: File,
         onProgress: (DownloadState.Downloading) -> Unit,
     ) = coroutineScope {
-        val ranges = computeRanges(totalBytes, threads)
+        val segments = computeSegments(totalBytes, threads)
+        val nextIndex = AtomicInteger(0)
         val downloaded = AtomicLong(0L)
         val lastReportTime = AtomicLong(System.currentTimeMillis())
         val lastReportBytes = AtomicLong(0L)
@@ -228,94 +256,102 @@ object MediaDownloader {
             raf.setLength(totalBytes)
             val channel = raf.channel
 
-            val jobs = ranges.map { range ->
+            val workerCount = minOf(threads, segments.size)
+            val workers = (0 until workerCount).map {
                 async(Dispatchers.IO) {
-                    var offset = range.first
-                    val end = range.last
-                    var attempt = 0
-                    while (offset <= end) {
+                    val buf = ByteArray(IO_BUF_SIZE)
+                    while (true) {
                         coroutineContext.ensureActive()
-                        try {
-                            val req = baseRequestBuilder(video, cookieHeader)
-                                .header("Range", "bytes=$offset-$end")
-                                .get()
-                                .build()
-                            executeCancellable(req) { resp ->
-                                if (resp.code != 206 && !(offset == 0L && resp.code == 200)) {
-                                    throw IllegalStateException("HTTP ${resp.code} on range $offset-$end")
-                                }
-                                val body = resp.body ?: throw IllegalStateException("Empty chunk body")
-                                body.byteStream().use { input ->
-                                    val buf = ByteArray(IO_BUF_SIZE)
-                                    while (offset <= end) {
-                                        coroutineContext.ensureActive()
-                                        val remaining = (end - offset + 1).coerceAtMost(buf.size.toLong()).toInt()
-                                        val n = input.read(buf, 0, remaining)
-                                        if (n <= 0) break
-                                        val bb = ByteBuffer.wrap(buf, 0, n)
-                                        var pos = offset
-                                        while (bb.hasRemaining()) {
-                                            val written = channel.write(bb, pos)
-                                            pos += written
-                                        }
-                                        offset += n
-                                        val totalRead = downloaded.addAndGet(n.toLong())
-                                        val now = System.currentTimeMillis()
-                                        if (now - lastReportTime.get() >= 250L || totalRead >= totalBytes) {
-                                            synchronized(reportLock) {
-                                                val prevTime = lastReportTime.get()
-                                                val dt = now - prevTime
-                                                if (dt >= 250L || totalRead >= totalBytes) {
-                                                    val prevBytes = lastReportBytes.get()
-                                                    val speed = if (dt > 0) ((totalRead - prevBytes) * 1000L) / dt else 0L
-                                                    lastReportTime.set(now)
-                                                    lastReportBytes.set(totalRead)
-                                                    onProgress(
-                                                        DownloadState.Downloading(
-                                                            progress = (totalRead.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f),
-                                                            bytesRead = totalRead,
-                                                            totalBytes = totalBytes,
-                                                            speedBytesPerSec = speed.coerceAtLeast(0L),
-                                                            threads = threads,
-                                                            stage = "${threads}线程并发下载中",
+                        val idx = nextIndex.getAndIncrement()
+                        if (idx >= segments.size) break
+                        val range = segments[idx]
+                        var offset = range.first
+                        val end = range.last
+                        var attempt = 0
+                        while (offset <= end) {
+                            coroutineContext.ensureActive()
+                            try {
+                                val req = baseRequestBuilder(targetUrl, headers, cookieHeader)
+                                    .header("Range", "bytes=$offset-$end")
+                                    .get()
+                                    .build()
+                                executeCancellable(HttpClients.downloadH1, req) { resp ->
+                                    if (resp.code != 206 && !(offset == 0L && resp.code == 200)) {
+                                        throw IllegalStateException("HTTP ${resp.code} on range $offset-$end")
+                                    }
+                                    val body = resp.body ?: throw IllegalStateException("Empty chunk body")
+                                    body.byteStream().use { input ->
+                                        while (offset <= end) {
+                                            coroutineContext.ensureActive()
+                                            val remaining = (end - offset + 1).coerceAtMost(buf.size.toLong()).toInt()
+                                            val n = input.read(buf, 0, remaining)
+                                            if (n <= 0) break
+                                            val bb = ByteBuffer.wrap(buf, 0, n)
+                                            var pos = offset
+                                            while (bb.hasRemaining()) {
+                                                val written = channel.write(bb, pos)
+                                                pos += written
+                                            }
+                                            offset += n
+                                            val totalRead = downloaded.addAndGet(n.toLong())
+                                            val now = System.currentTimeMillis()
+                                            if (now - lastReportTime.get() >= 250L || totalRead >= totalBytes) {
+                                                synchronized(reportLock) {
+                                                    val prevTime = lastReportTime.get()
+                                                    val dt = now - prevTime
+                                                    if (dt >= 250L || totalRead >= totalBytes) {
+                                                        val prevBytes = lastReportBytes.get()
+                                                        val speed = if (dt > 0) ((totalRead - prevBytes) * 1000L) / dt else 0L
+                                                        lastReportTime.set(now)
+                                                        lastReportBytes.set(totalRead)
+                                                        onProgress(
+                                                            DownloadState.Downloading(
+                                                                progress = (totalRead.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f),
+                                                                bytesRead = totalRead,
+                                                                totalBytes = totalBytes,
+                                                                speedBytesPerSec = speed.coerceAtLeast(0L),
+                                                                threads = workerCount,
+                                                                stage = "${workerCount}线程并发下载中",
+                                                            )
                                                         )
-                                                    )
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
+                                if (offset <= end) {
+                                    throw IllegalStateException("Premature EOF at $offset/$end")
+                                }
+                            } catch (ce: CancellationException) {
+                                throw ce
+                            } catch (e: Exception) {
+                                coroutineContext.ensureActive()
+                                attempt++
+                                if (attempt > 2) throw e
                             }
-                            if (offset <= end) {
-                                throw IllegalStateException("Premature EOF at $offset/$end")
-                            }
-                        } catch (ce: CancellationException) {
-                            throw ce
-                        } catch (e: Exception) {
-                            coroutineContext.ensureActive()
-                            attempt++
-                            if (attempt > 2) throw e
                         }
                     }
                 }
             }
-            jobs.awaitAll()
+            workers.awaitAll()
         }
     }
 
     private suspend fun downloadSingleStreamToGallery(
         context: Context,
-        video: ExtractedVideo,
+        targetUrl: String,
+        headers: Map<String, String>,
         cookieHeader: String?,
         displayName: String,
         mimeType: String,
         onProgress: (DownloadState.Downloading) -> Unit,
     ): DownloadState = withContext(Dispatchers.IO) {
-        val req = baseRequestBuilder(video, cookieHeader).get().build()
+        val req = baseRequestBuilder(targetUrl, headers, cookieHeader).get().build()
         var target: OutputTarget? = null
         var completed = false
         try {
-            executeCancellable(req) { resp ->
+            executeCancellable(HttpClients.downloadH1, req) { resp ->
                 if (!resp.isSuccessful) {
                     return@executeCancellable DownloadState.Failed("下载失败（HTTP ${resp.code}）")
                 }

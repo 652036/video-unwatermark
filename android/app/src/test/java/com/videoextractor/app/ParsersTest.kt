@@ -162,6 +162,8 @@ class ParsersTest {
 
         assertTrue(SniffHelper.looksLikeMediaUrl("https://cloud.video.taobao.com/play/u/1/test.mp4"))
         assertTrue(SniffHelper.looksLikeMediaUrl("https://video.twimg.com/ext_tw_video/1/pu/vid/720x1280/a.mp4"))
+        assertTrue(SniffHelper.looksLikeMediaUrl("https://v9-colds.douyinvod.com/abc/video/tos/cn/tos-cn-ve-15/xyz"))
+        assertTrue(SniffHelper.looksLikeMediaUrl("https://v5-dy-ov-experiment.zjcdn.com/abc/video/tos/cn/xyz"))
         assertFalse(SniffHelper.looksLikeMediaUrl("https://bixi.alicdn.com/punish/captcha.mp4"))
         assertFalse(SniffHelper.looksLikeMediaUrl("https://cdn.example.com/static/app.js"))
     }
@@ -253,22 +255,23 @@ class ParsersTest {
 
     @Test
     fun downloaderRangeChunkingAndProbeParsing() {
-        assertEquals(1, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(500_000L))
-        assertEquals(3, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(2_000_000L))
-        assertEquals(4, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(8_000_000L))
-        assertEquals(6, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(30_000_000L))
+        assertEquals(1, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(300_000L))
+        assertEquals(4, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(1_000_000L))
+        assertEquals(6, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(6_000_000L))
+        assertEquals(8, com.videoextractor.app.download.MediaDownloader.chooseThreadCount(20_000_000L))
 
-        val ranges = com.videoextractor.app.download.MediaDownloader.computeRanges(100L, 6)
-        assertEquals(6, ranges.size)
-        assertEquals(0L, ranges.first().first)
-        assertEquals(99L, ranges.last().last)
-        for (i in 1 until ranges.size) {
-            assertEquals(ranges[i - 1].last + 1, ranges[i].first)
+        val total = 10L * 1024 * 1024
+        val segments = com.videoextractor.app.download.MediaDownloader.computeSegments(total, 6)
+        assertTrue(segments.size >= 6)
+        assertEquals(0L, segments.first().first)
+        assertEquals(total - 1, segments.last().last)
+        for (i in 1 until segments.size) {
+            assertEquals(segments[i - 1].last + 1, segments[i].first)
         }
 
         assertEquals(
             28083412L,
-            com.videoextractor.app.download.MediaDownloader.parseTotalFromContentRange("bytes 0-0/28083412"),
+            com.videoextractor.app.download.MediaDownloader.parseTotalFromContentRange("bytes 0-1/28083412"),
         )
     }
 }
