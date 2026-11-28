@@ -206,6 +206,14 @@ fun InteractiveWebViewDialog(
                                         @JavascriptInterface
                                         fun onEvent(type: String, value: String) {
                                             when (type) {
+                                                "douyin_router" -> {
+                                                    val parsed = DouyinExtractor.parseRouterDataJson(value, initialUrl)
+                                                    if (parsed is ExtractResult.Success) {
+                                                        post {
+                                                            capturedVideo = parsed.video.copy(engine = "browser-router")
+                                                        }
+                                                    }
+                                                }
                                                 "video" -> {
                                                     if (SniffHelper.looksLikeMediaUrl(value)) {
                                                         recordVideo(value, "browser-dom")

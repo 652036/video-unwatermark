@@ -37,6 +37,9 @@ object SniffHelper {
             low.contains(".m3u8") ||
             low.contains("/aweme/v1/play") ||
             low.contains("video_mp4") ||
+            low.contains("douyinvod.com/") ||
+            (low.contains("zjcdn.com/") && low.contains("/video/")) ||
+            low.contains("/video/tos/") ||
             low.contains("cloud.video.taobao.com") ||
             low.contains("tbvideo") ||
             low.contains("video.goofish") ||
@@ -81,7 +84,7 @@ object SniffHelper {
 
     fun buildSniffTargetUrl(canonicalUrl: String): String {
         UrlUtils.awemeIdOf(canonicalUrl)?.let {
-            return "https://www.iesdouyin.com/share/video/$it/"
+            return "https://m.douyin.com/share/video/$it"
         }
         UrlUtils.xianyuItemIdOf(canonicalUrl)?.let {
             return "https://h5.m.goofish.com/item?id=$it"
@@ -90,22 +93,56 @@ object SniffHelper {
     }
 
     /**
-     * Passive JS hook injected into WebView pages to report `<video>` sources and
-     * public MTOP JSON responses (e.g. Xianyu detail/video query) back to Kotlin.
+     * Passive JS hook injected into WebView pages to report:
+     * - Hydrated `window._ROUTER_DATA` (Douyin share page with watermark-free play_addr & title)
+     * - `<video>` / `<source>` elements (with muted play nudge so lazy videos start loading)
+     * - `performance.getEntriesByType('resource')` media URLs
+     * - Public MTOP JSON responses (Xianyu detail / video query)
      */
     const val HOOK_JS = """
         (function() {
           if (window.__veHooked) return;
           window.__veHooked = true;
+          var sentRouter = false;
           function report(type, val) {
             try { if (window.VEBridge && val) window.VEBridge.onEvent(type, String(val)); } catch (e) {}
           }
-          function scanVideos() {
+          function scanPage() {
+            try {
+              if (!sentRouter && window._ROUTER_DATA) {
+                var s = JSON.stringify(window._ROUTER_DATA);
+                if (s && (s.indexOf('play_addr') !== -1 || s.indexOf('aweme_id') !== -1)) {
+                  sentRouter = true;
+                  report('douyin_router', s);
+                }
+              }
+            } catch (e) {}
             try {
               var vids = document.querySelectorAll('video, source');
               for (var i = 0; i < vids.length; i++) {
-                var s = vids[i].currentSrc || vids[i].src || vids[i].getAttribute('src');
-                if (s && s.indexOf('http') === 0) report('video', s);
+                var v = vids[i];
+                var src = v.currentSrc || v.src || v.getAttribute('src');
+                if (src && src.indexOf('http') === 0) report('video', src);
+                if (v.tagName === 'VIDEO') {
+                  try {
+                    v.muted = true;
+                    v.defaultMuted = true;
+                    v.volume = 0;
+                    var p = v.play();
+                    if (p && p.catch) p.catch(function(){});
+                  } catch (e) {}
+                }
+              }
+            } catch (e) {}
+            try {
+              if (window.performance && performance.getEntriesByType) {
+                var entries = performance.getEntriesByType('resource') || [];
+                for (var j = 0; j < entries.length; j++) {
+                  var n = entries[j] && entries[j].name;
+                  if (n && (n.indexOf('douyinvod.com') !== -1 || n.indexOf('zjcdn.com') !== -1 || n.indexOf('/video/tos/') !== -1 || n.indexOf('/aweme/v1/play') !== -1)) {
+                    report('video', n);
+                  }
+                }
               }
             } catch (e) {}
           }
@@ -140,8 +177,8 @@ object SniffHelper {
             });
             return origSend.apply(this, arguments);
           };
-          setInterval(scanVideos, 1200);
-          scanVideos();
+          setInterval(scanPage, 900);
+          scanPage();
         })();
     """
 }
@@ -149,7 +186,7 @@ object SniffHelper {
 class WebViewSniffer(private val appContext: Context) {
 
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun sniff(canonicalUrl: String, timeoutMs: Long = 16_000L): ExtractResult? {
+    suspend fun sniff(canonicalUrl: String, timeoutMs: Long = 18_000L): ExtractResult? {
         val targetUrl = SniffHelper.buildSniffTargetUrl(canonicalUrl)
         val platform = UrlUtils.platformOf(canonicalUrl)
         val deferred = CompletableDeferred<ExtractResult?>()
@@ -169,6 +206,8 @@ class WebViewSniffer(private val appContext: Context) {
                         HttpClients.MOBILE_UA
                     }
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    // Give the offscreen WebView a real mobile viewport so SPA/SSR video players hydrate.
+                    layout(0, 0, 390, 844)
                 }
                 webView = wv
 
@@ -201,6 +240,14 @@ class WebViewSniffer(private val appContext: Context) {
                     fun onEvent(type: String, value: String) {
                         if (deferred.isCompleted) return
                         when (type) {
+                            "douyin_router" -> {
+                                val parsed = DouyinExtractor.parseRouterDataJson(value, canonicalUrl)
+                                if (parsed is ExtractResult.Success) {
+                                    deferred.complete(
+                                        ExtractResult.Success(parsed.video.copy(engine = "webview-router"))
+                                    )
+                                }
+                            }
                             "video" -> {
                                 if (SniffHelper.looksLikeMediaUrl(value)) {
                                     completeVideo(value, "webview-dom")
